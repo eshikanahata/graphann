@@ -28,6 +28,7 @@ static void print_usage(const char* prog) {
               << " --K <num_neighbors>"
               << " --L <comma_separated_L_values>"
               << " [--quantized]"
+              << " [--dynamic]"
               << std::endl;
 }
 
@@ -62,6 +63,7 @@ int main(int argc, char** argv) {
     std::string index_path, data_path, query_path, gt_path, L_str;
     uint32_t K = 10;
     bool use_quantized = false;
+    bool dynamic_L = false;
 
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -72,6 +74,7 @@ int main(int argc, char** argv) {
         else if (arg == "--K" && i + 1 < argc)    K = std::atoi(argv[++i]);
         else if (arg == "--L" && i + 1 < argc)    L_str = argv[++i];
         else if (arg == "--quantized")             use_quantized = true;
+        else if (arg == "--dynamic")               dynamic_L = true;
         else if (arg == "--help" || arg == "-h") {
             print_usage(argv[0]);
             return 0;
@@ -131,6 +134,8 @@ int main(int argc, char** argv) {
 
     // --- Run search for each L value ---
     std::string mode_str = use_quantized ? "Quantized ADC" : "Exact Float32";
+    if (dynamic_L) mode_str += " (Dynamic Beam)";
+    
     std::cout << "\n=== Search Results (K=" << K
               << ", Mode=" << mode_str << ") ===" << std::endl;
     std::cout << std::setw(8) << "L"
@@ -148,7 +153,7 @@ int main(int argc, char** argv) {
 
         #pragma omp parallel for schedule(dynamic, 16)
         for (int32_t q = 0; q < (int32_t)nq; q++) {
-            SearchResult res = index.search(queries.row(q), K, L, use_quantized);
+            SearchResult res = index.search(queries.row(q), K, L, use_quantized, dynamic_L);
 
             recalls[q] = compute_recall(res.ids, gt.row(q), K);
             dist_cmps[q] = res.dist_cmps;
