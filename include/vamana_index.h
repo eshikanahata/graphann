@@ -46,7 +46,8 @@ class VamanaIndex {
     //   use_quantized: if true, use ADC (asymmetric distance) for traversal
     //                  and re-rank final candidates with exact float32
     SearchResult search(const float* query, uint32_t K, uint32_t L,
-                        bool use_quantized = false, bool dynamic_L = false) const;
+                        bool use_quantized = false, bool dynamic_L = false,
+                        float dyn_floor_ratio = 0.5f, float dyn_exp_mult = 2.0f, uint32_t dyn_hops = 10) const;
 
     // ---- Persistence ----
     // Save index (graph + metadata) to a binary file.
@@ -72,12 +73,14 @@ class VamanaIndex {
     // Greedy search starting from start_node_.
     // Returns (sorted candidate list, number of distance computations).
     std::pair<std::vector<Candidate>, uint32_t>
-    greedy_search(const float* query, uint32_t L, bool dynamic_L = false) const;
+    greedy_search(const float* query, uint32_t L, bool dynamic_L = false,
+                  float dyn_floor_ratio = 0.5f, float dyn_exp_mult = 2.0f, uint32_t dyn_hops = 10) const;
 
     // Greedy search using quantized asymmetric distance.
     // After traversal, re-ranks only the top-K candidates with exact float32 distance.
     std::pair<std::vector<Candidate>, uint32_t>
-    greedy_search_quantized(const float* query, uint32_t L, uint32_t K, bool dynamic_L = false) const;
+    greedy_search_quantized(const float* query, uint32_t L, uint32_t K, bool dynamic_L = false,
+                            float dyn_floor_ratio = 0.5f, float dyn_exp_mult = 2.0f, uint32_t dyn_hops = 10) const;
 
     // Alpha-RNG pruning: selects a diverse subset of candidates as neighbors.
     // Modifies graph_[node] in place. Candidates should NOT include node itself.

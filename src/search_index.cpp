@@ -64,6 +64,9 @@ int main(int argc, char** argv) {
     uint32_t K = 10;
     bool use_quantized = false;
     bool dynamic_L = false;
+    float dyn_floor_ratio = 0.5f;
+    float dyn_exp_mult = 2.0f;
+    uint32_t dyn_hops = 10;
 
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -75,6 +78,9 @@ int main(int argc, char** argv) {
         else if (arg == "--L" && i + 1 < argc)    L_str = argv[++i];
         else if (arg == "--quantized")             use_quantized = true;
         else if (arg == "--dynamic")               dynamic_L = true;
+        else if (arg == "--dyn-floor-ratio" && i + 1 < argc) dyn_floor_ratio = std::atof(argv[++i]);
+        else if (arg == "--dyn-exp-mult" && i + 1 < argc)    dyn_exp_mult = std::atof(argv[++i]);
+        else if (arg == "--dyn-hops" && i + 1 < argc)        dyn_hops = std::atoi(argv[++i]);
         else if (arg == "--help" || arg == "-h") {
             print_usage(argv[0]);
             return 0;
@@ -138,6 +144,11 @@ int main(int argc, char** argv) {
     
     std::cout << "\n=== Search Results (K=" << K
               << ", Mode=" << mode_str << ") ===" << std::endl;
+    if (dynamic_L) {
+        std::cout << "Dynamic Params: FloorRatio=" << dyn_floor_ratio 
+                  << " ExpMult=" << dyn_exp_mult
+                  << " Hops=" << dyn_hops << std::endl;
+    }
     std::cout << std::setw(8) << "L"
               << std::setw(14) << "Recall@" + std::to_string(K)
               << std::setw(16) << "Avg Dist Cmps"
@@ -153,7 +164,7 @@ int main(int argc, char** argv) {
 
         #pragma omp parallel for schedule(dynamic, 16)
         for (int32_t q = 0; q < (int32_t)nq; q++) {
-            SearchResult res = index.search(queries.row(q), K, L, use_quantized, dynamic_L);
+            SearchResult res = index.search(queries.row(q), K, L, use_quantized, dynamic_L, dyn_floor_ratio, dyn_exp_mult, dyn_hops);
 
             recalls[q] = compute_recall(res.ids, gt.row(q), K);
             dist_cmps[q] = res.dist_cmps;

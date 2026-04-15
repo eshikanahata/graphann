@@ -47,7 +47,8 @@ VamanaIndex::~VamanaIndex() {
 // is drastically faster than Red-Black Tree pointer-chasing.
 
 std::pair<std::vector<VamanaIndex::Candidate>, uint32_t>
-VamanaIndex::greedy_search(const float* query, uint32_t L, bool dynamic_L) const {
+VamanaIndex::greedy_search(const float* query, uint32_t L, bool dynamic_L,
+                           float dyn_floor_ratio, float dyn_exp_mult, uint32_t dyn_hops) const {
     // Candidate list: sorted by (distance, id), bounded at size L.
     // Pre-allocate to avoid reallocation.
     std::vector<Candidate> candidates;
@@ -70,6 +71,7 @@ VamanaIndex::greedy_search(const float* query, uint32_t L, bool dynamic_L) const
 
     // Proposal C Dynamics
     uint32_t active_L = dynamic_L ? std::min((uint32_t)10, L) : L;
+    uint32_t floor_L = std::max((uint32_t)10, static_cast<uint32_t>(L * dyn_floor_ratio));
     float best_dist = FLT_MAX;
     uint32_t hops_without_improvement = 0;
 
@@ -79,14 +81,14 @@ VamanaIndex::greedy_search(const float* query, uint32_t L, bool dynamic_L) const
             if (current_best < best_dist * 0.95f) {
                 best_dist = current_best;
                 hops_without_improvement = 0;
-                active_L = std::max((uint32_t)10, active_L > 5 ? active_L - 5 : 10);
+                active_L = std::max(floor_L, static_cast<uint32_t>(active_L * 0.9f));
             } else if (current_best < best_dist) {
                 best_dist = current_best;
                 hops_without_improvement = 0;
             } else {
                 hops_without_improvement++;
-                if (hops_without_improvement >= 5) {
-                    active_L = std::min(L, active_L + 10);
+                if (hops_without_improvement >= dyn_hops) {
+                    active_L = std::min(L, static_cast<uint32_t>(std::max((float)active_L + 1.0f, active_L * dyn_exp_mult)));
                     hops_without_improvement = 0;
                 }
             }
@@ -367,7 +369,8 @@ void VamanaIndex::build_quantized_data() {
 // Uses flat sorted vector (no std::set) for zero heap allocations.
 
 std::pair<std::vector<VamanaIndex::Candidate>, uint32_t>
-VamanaIndex::greedy_search_quantized(const float* query, uint32_t L, uint32_t K, bool dynamic_L) const {
+VamanaIndex::greedy_search_quantized(const float* query, uint32_t L, uint32_t K, bool dynamic_L,
+                                     float dyn_floor_ratio, float dyn_exp_mult, uint32_t dyn_hops) const {
     std::vector<Candidate> candidates;
     candidates.reserve(L + 1);
 
@@ -386,6 +389,7 @@ VamanaIndex::greedy_search_quantized(const float* query, uint32_t L, uint32_t K,
 
     // Proposal C Dynamics
     uint32_t active_L = dynamic_L ? std::min((uint32_t)10, L) : L;
+    uint32_t floor_L = std::max((uint32_t)10, static_cast<uint32_t>(L * dyn_floor_ratio));
     float best_dist = FLT_MAX;
     uint32_t hops_without_improvement = 0;
 
@@ -395,14 +399,14 @@ VamanaIndex::greedy_search_quantized(const float* query, uint32_t L, uint32_t K,
             if (current_best < best_dist * 0.95f) {
                 best_dist = current_best;
                 hops_without_improvement = 0;
-                active_L = std::max((uint32_t)10, active_L > 5 ? active_L - 5 : 10);
+                active_L = std::max(floor_L, static_cast<uint32_t>(active_L * 0.9f));
             } else if (current_best < best_dist) {
                 best_dist = current_best;
                 hops_without_improvement = 0;
             } else {
                 hops_without_improvement++;
-                if (hops_without_improvement >= 5) {
-                    active_L = std::min(L, active_L + 10);
+                if (hops_without_improvement >= dyn_hops) {
+                    active_L = std::min(L, static_cast<uint32_t>(std::max((float)active_L + 1.0f, active_L * dyn_exp_mult)));
                     hops_without_improvement = 0;
                 }
             }
@@ -481,16 +485,17 @@ VamanaIndex::greedy_search_quantized(const float* query, uint32_t L, uint32_t K,
 // ============================================================================
 
 SearchResult VamanaIndex::search(const float* query, uint32_t K, uint32_t L,
-                                 bool use_quantized, bool dynamic_L) const {
+                                 bool use_quantized, bool dynamic_L,
+                                 float dyn_floor_ratio, float dyn_exp_mult, uint32_t dyn_hops) const {
     if (L < K) L = K;
 
     Timer t;
     std::pair<std::vector<Candidate>, uint32_t> search_result;
 
     if (use_quantized && has_quantized_) {
-        search_result = greedy_search_quantized(query, L, K, dynamic_L);
+        search_result = greedy_search_quantized(query, L, K, dynamic_L, dyn_floor_ratio, dyn_exp_mult, dyn_hops);
     } else {
-        search_result = greedy_search(query, L, dynamic_L);
+        search_result = greedy_search(query, L, dynamic_L, dyn_floor_ratio, dyn_exp_mult, dyn_hops);
     }
 
     auto& [candidates, dist_cmps] = search_result;
