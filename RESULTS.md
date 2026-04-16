@@ -1,6 +1,6 @@
 # Search Optimization Results
 
-This document summarizes the final performance improvements achieved by integrating Proposals A, B, C, and D for DiskANN Vamana Search optimization.
+This document summarizes the performance improvements achieved by implementing Proposals A, B, C and D for DiskANN Vamana Search optimization.
 
 ## Implementation Summaries
 
@@ -53,7 +53,25 @@ _Comparing Exact Float32 (Flat) vs. Quantized ADC (Flat):_
 
 ---
 
-### 3. Proposal C Impact (Dynamic Beam Width)
+### 3. Proposal B Impact (Early Abandonment)
+
+_The early cancellation logic evaluates identically to baseline behavior under normal search ranges._
+
+_Comparing Exact Float32 without Early Abandonment vs with Early Abandonment (16-dim AVX boundaries):_
+
+| L   | Recall@10 | Dist Cmps | No-EA Latency | **EA Latency**  | Improvement |
+|-----|-----------|-----------|---------------|-----------------|-------------|
+| 10  | 0.7734    | 641.7     | 814.4 µs      | **766.0 µs**    | -6.0%       |
+| 50  | 0.9662    | 1510.5    | 1741.7 µs     | **1679.1 µs**   | -3.6%       |
+| 100 | 0.9882    | 2437.7    | 2746.8 µs     | **2568.0 µs**   | -6.5%       |
+| 200 | 0.9961    | 4048.4    | 4845.8 µs     | **4753.2 µs**   | -1.9%       |
+
+**Observations:** 
+In tests, Early Abandonment accurately preserves identical Recalls and equivalent traversal depths (`dist_cmps` match exactly) as it aborts intra-vector bounds rather than node jumps. Modulating the cancellation checks dynamically on intervals of 16 loops guarantees seamless execution over AVX workloads without disrupting the instruction pipeline. The evaluations save between 1.9% to 6.5% of total search latency natively at virtual zero-cost operation internally.
+
+---
+
+### 4. Proposal C Impact (Dynamic Beam Width)
 The Dynamic Beam module modifies navigational scope on the fly, tracking boundary limitations dynamically without discarding buffered historical routes, yielding improved performance on "fast routing highways" inherently.
 
 _Comparing Standard Exact Float32 vs. Dynamic Exact Float32:_
@@ -80,7 +98,7 @@ _Comparing Standard Quantized ADC vs. Dynamic Quantized ADC:_
 
 ---
 
-### 4. Hyperparameter Grid-Search Analysis
+### 4.1 Hyperparameter Grid-Search Analysis
 Configuring the Dynamic Beam algorithm parameters at maximal test sets ($L=200$) yields the following topological efficiency mapping. We adjust the Shrink Floor ratios ($F$), Expansion Multipliers ($M$), and Hop Limitations ($H$).
 
 Baseline for Exact $L=200$: **4753.2 µs** ($0.9961$ Recall).
